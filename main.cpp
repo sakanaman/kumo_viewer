@@ -5,24 +5,19 @@ int main()
 {
     try
     {
+        //Load grid data from ~.nvdb
         auto handle 
         = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../nvdbs/bunny_cloud.nvdb");
-        auto* grid = handle.grid<float>();
-        auto acc = grid->getAccessor();
-        nanovdb::TrilinearSampler<decltype(acc)> samp(acc);
-        std::cout << samp(nanovdb::Vec3<float>(40,10,0)) << std::endl;
-        if(!grid)
-            throw std::runtime_error("File did not contain a grid with value type float");
-        if (handle.gridMetaData()->isFogVolume() == false) {
-            throw std::runtime_error("Grid must be a fog volume");
-        }
-        std::cout << grid->gridName() << std::endl;
-        std::cout << grid->worldBBox().dim()[0] << ", "<< grid->worldBBox().dim()[1] << ", "<< grid->worldBBox().dim()[2] <<  std::endl;
+
+        // Load Grid to GPU
+        handle.deviceUpload();
+
         // TODO: use setting file (eg. json, yaml...etc)
         RenderSetting set_info;
         set_info.height = 800;
         set_info.width = 1500;
 
+        //rendering standby...
         render(handle, set_info);
     }
     catch(const std::exception& e)

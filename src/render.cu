@@ -18,7 +18,12 @@ void check_cuda(cudaError_t result, char const *const func, const char *const fi
     }
 }
 
-__global__ void renderKernel(float *fb, int max_x, int max_y)
+__gpu__ void genFirstRay(int i, nanovdb::Vec3f& origin, nanovdb::Vec3f& dir)
+{
+    
+}
+
+__kernel__ void renderKernel(float *fb, int max_x, int max_y)
 {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -30,46 +35,8 @@ __global__ void renderKernel(float *fb, int max_x, int max_y)
     fb[pixel_index + 2] = 0.2;
 }
 
-void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
-            const RenderSetting& set_info)
+void SavePPM(float* fb, int nx, int ny)
 {
-    #ifdef __CUDACC__
-    std::cout << "now using CUDA compiler ..." << std::endl;
-    #endif
-    
-    auto* h_grid = handle.grid<float>();
-
-    int nx = set_info.width;
-    int ny = set_info.height;
-    int tx = 8;
-    int ty = 8;
-
-    std::cerr << "Rendering a " << nx << "x" << ny << " image ";
-    std::cerr << "in " << tx << "x" << ty << " blocks.\n";
-
-    int num_pixels = nx*ny;
-    size_t fb_size = 3*num_pixels*sizeof(float);
-
-    float* fb;
-    checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
-
-    clock_t start, stop;
-    start = clock();
-
-    //Render our buffer
-    dim3 blocks(nx/tx + 1, ny/ty + 1);
-    dim3 threads(tx, ty);
-
-    renderKernel<<<blocks, threads>>>(fb, nx, ny);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    stop = clock();
-
-    double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
-    std::cerr << "took " << timer_seconds << " seconds.\n";
-
-    
     // Output FB as Image
     std::ofstream file("output.ppm");
     file << "P3\n" << nx << " " << ny << "\n255\n";
@@ -86,6 +53,54 @@ void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
         }
     }
     file.close();
+}
 
+void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
+            const RenderSetting& set_info)
+{
+    auto* d_grid = handle.deviceGrid();
+    auto* h_grid = handle.grid<float>();
+    auto acc = h_grid->getAccessor();
+    auto bbox = h_grid->indexBBox();
+    
+    // check max density
+    float max_density = searchMaxDensity(bbox, acc);
+
+    //get data from render setting
+    int nx = set_info.width;
+    int ny = set_info.height;
+    int tx = 8;
+    int ty = 8;
+
+    std::cerr << "Rendering a " << nx << "x" << ny << " image ";
+    std::cerr << "in " << tx << "x" << ty << " blocks.\n";
+
+    int num_pixels = nx*ny;
+    size_t fb_size = 3*num_pixels*sizeof(float);
+
+    //malloc pixel buffer(for unified memory)
+    float* fb;
+    checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
+
+    //start time
+    clock_t start, stop;
+    start = clock();
+
+    //call kernel function
+    dim3 blocks(nx/tx + 1, ny/ty + 1);
+    dim3 threads(tx, ty);
+    renderKernel<<<blocks, threads>>>(fb, nx, ny);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    //finish time
+    stop = clock();
+    double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
+    std::cerr << "took " << timer_seconds << " seconds.\n";
+
+    //save ppm
+    SavePPM(fb, nx, ny);
+
+    //free several data
     checkCudaErrors(cudaFree(fb));
 }

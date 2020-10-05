@@ -13,13 +13,13 @@ if(CUDA_FOUND)
     enable_language(CUDA)
 endif()
 
-#extern(for header only)
+#extern
 include_directories(ext)
 
 #include
 include_directories(include)
 
-#zlib include ???
+#zlib include
 include_directories(${ZLIB_INCLUDE_DIR})
 
 
