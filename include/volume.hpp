@@ -26,6 +26,8 @@ __gpu__ nanovdb::Vec3f skycolor(const nanovdb::Ray<float>& r) {
     return (1.0f-t)*nanovdb::Vec3f(1.0, 1.0, 1.0) + t*nanovdb::Vec3f(0.5, 0.7, 1.0);
 }
 
+// We don`t use this function when we render "wdas_cloud.nvdb" because it's so heavy.
+// So, please set max_density = 1.0 when you render wdas_cloud.
 __cpu__ float searchMaxDensity(const nanovdb::CoordBBox& bbox,
                                const nanovdb::ReadAccessor<nanovdb::NanoRoot<float>>& acc)
 {
@@ -177,7 +179,11 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
     for(int depth = 0; depth < max_depth; depth++)
     {
         //not intersect..
-        if(wRay.clip(wBbox) == false) return {0,0,0};
+        if(wRay.clip(wBbox) == false)
+        {
+            L = skycolor(wRay);
+            break;
+        }
 
 
         //intersect!!
@@ -220,16 +226,34 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
         }
         else if (e == 1)//scatter
         {
-            
+            //NEE for sunlight
+            float theta = acosf(lightdir.dot(wRay.dir()));
+            float nee_phase = henyey_greenstein_phase(theta, g);
+            L += f/pdfs * nee_phase * SunLightNEE(pos, lightdir, rand_state, grid, l_intensity, max_t, sigma_s, sigma_a);  
+
+            //make next scatter Ray
+            //   localize
+            nanovdb::Vec3f b1;
+            nanovdb::Vec3f b2;
+            branchlessONB(wRay.dir(), b1, b2);
+            //   sample scatter dir
+            nanovdb::Vec3f local_scatterdir =  henyey_greenstein_sample(g, rnd(rand_state), rnd(rand_state));
+            //   reset local ray to world ray
+            nanovdb::Vec3f scatterdir = local2world(local_scatterdir, b1, b2, wRay.dir());
+            //   reset ray
+            wRay = nanovdb::Ray<float>{pos, scatterdir};
+
+            //NOTE: you don't have to calculate throuput here!!
         }
         else // null scatter
         {
-
+            //we have to do NOTHING !!
+            continue;
         }
         
     }
 
-    return f/pdfs;
+    return L;
 }
 
 
