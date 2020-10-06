@@ -71,12 +71,12 @@ __gpu__ nanovdb::Vec3f henyey_greenstein_sample(float g, float u, float v)
             cosTheta};
 }
 
-__gpu__ float distant_sample(curandState* rand_state, float sigma_t, float u)
+__gpu__ float distant_sample(float sigma_t, float u)
 {
     return -logf(1 - u)/sigma_t;
 }
 
-__gpu__ int sampleEvent(nanovdb::Vec3f& events, float u)
+__gpu__ int sampleEvent(const nanovdb::Vec3f& events, float u)
 {
     // 0-->absorp, 1-->scatter, 2-->null scatter
     nanovdb::Vec3f cdf = nanovdb::Vec3f{events[0], 
@@ -95,8 +95,64 @@ __gpu__ int sampleEvent(nanovdb::Vec3f& events, float u)
     return 2;
 }
 
+__gpu__ nanovdb::Vec3f SunLightNEE(const nanovdb::Vec3f& shadowRayorigin,
+                                   const nanovdb::Vec3f& shadowRaydir,
+                                   curandState* rand_state,
+                                   const nanovdb::FloatGrid* grid,
+                                   const float l_intensity,
+                                   const float max_t,
+                                   const float sigma_s,
+                                   const float sigma_a)
+{
+    auto acc = grid->getAccessor();
+    auto wBbox = grid->worldBBox();
+    nanovdb::TrilinearSampler<decltype(acc)> sampler(acc);
+
+    nanovdb::Ray<float> shadowRay{shadowRayorigin, shadowRaydir};
+    // check intersect bbox and ray
+    shadowRay.clip(wBbox); 
+
+    //Ratio Tracing
+    nanovdb::Vec3f throughput{1.0, 1.0, 1.0};
+    float t = shadowRay.t0();
+    float t_far = shadowRay.t1();
+    while(true)
+    {
+        //distance sampling
+        t += distant_sample(max_t, rnd(rand_state));
+
+        //sampled distance is out of volume --> break
+        if(t >= t_far)
+        {
+            break;
+        }
+
+        // calculate several parametor in now position
+        float density = sampler(grid->worldToIndexF(shadowRay(t)));
+        float absorp_weight = sigma_a * density;
+        float scatter_weight = sigma_s * density;
+        float null_weight = max_t - absorp_weight - scatter_weight;
+        nanovdb::Vec3f events{absorp_weight, scatter_weight, null_weight};
+
+        //sample event
+        int e = sampleEvent(events, rnd(rand_state));
+
+        if(e == 1 || e == 2)
+        {
+            break;
+        }
+        else
+        {
+            throughput *= null_weight/max_t;
+        }
+    }
+    return throughput * l_intensity;
+}
+
 
 __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
+                                const nanovdb::Vec3f& lightdir,
+                                const float l_intensity,
                                 curandState* rand_state,
                                 const float max_density,
                                 const int max_depth,
@@ -105,8 +161,6 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
                                 float g,
                                 const nanovdb::Ray<float>& firstray)
 {
-
-    nanovdb::Vec3f lightdir{1,0,0};
     
     float max_t = (sigma_s + sigma_a) * max_density;
 
@@ -117,6 +171,7 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
 
     nanovdb::Vec3f f{1,1,1};
     nanovdb::Vec3f pdfs{1,1,1};
+    nanovdb::Vec3f L{};
 
     // start delta tracking
     for(int depth = 0; depth < max_depth; depth++)
@@ -131,13 +186,14 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
 
         //distant sampling
         float t = t_near;
-        float d_sampled = distant_sample(rand_state, max_t, rnd(rand_state));
+        float d_sampled = distant_sample(max_t, rnd(rand_state));
         t += d_sampled;
 
          //transmit
         if(t >= t_far)
         {
             f = f * skycolor(wRay);
+            L += f/pdfs;
             break;
         }
 
@@ -155,6 +211,22 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
         //Sample Event
         // 0-->absorp, 1-->scatter, 2-->null scatter
         int e = sampleEvent(events, rnd(rand_state));
+
+
+        if(e == 0)//absorp
+        {
+            //Todo: correspond to emission
+            break;
+        }
+        else if (e == 1)//scatter
+        {
+            
+        }
+        else // null scatter
+        {
+
+        }
+        
     }
 
     return f/pdfs;
