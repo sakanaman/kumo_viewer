@@ -247,7 +247,8 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
         }
         else // null scatter
         {
-            //we have to do NOTHING !!
+            // renew ray
+            wRay = nanovdb::Ray<float>{pos, wRay.dir()};
             continue;
         }
         
