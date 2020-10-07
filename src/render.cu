@@ -18,42 +18,7 @@ void check_cuda(cudaError_t result, char const *const func, const char *const fi
     }
 }
 
-__gpu__ void genFirstRay(int i, nanovdb::Vec3f& origin, nanovdb::Vec3f& dir)
-{
-    
-}
 
-__kernel__ void renderKernel(float *fb, int max_x, int max_y)
-{
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
-    int j = threadIdx.y + blockIdx.y * blockDim.y;
-    if((i >= max_x) || (j >= max_y)) return;
-
-    int pixel_index = j*max_x*3 + i*3;
-    fb[pixel_index + 0] = float(i) / max_x;
-    fb[pixel_index + 1] = float(j) / max_y;
-    fb[pixel_index + 2] = 0.2;
-}
-
-void SavePPM(float* fb, int nx, int ny)
-{
-    // Output FB as Image
-    std::ofstream file("output.ppm");
-    file << "P3\n" << nx << " " << ny << "\n255\n";
-    for (int j = ny-1; j >= 0; j--) {
-        for (int i = 0; i < nx; i++) {
-            size_t pixel_index = j*3*nx + i*3;
-            float r = fb[pixel_index + 0];
-            float g = fb[pixel_index + 1];
-            float b = fb[pixel_index + 2];
-            int ir = int(255.99*r);
-            int ig = int(255.99*g);
-            int ib = int(255.99*b);
-            file << ir << " " << ig << " " << ib << "\n";
-        }
-    }
-    file.close();
-}
 
 void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
             const RenderSetting& set_info)
@@ -71,6 +36,15 @@ void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
     int ny = set_info.height;
     int tx = 8;
     int ty = 8;
+    dim3 blocks(nx/tx + 1, ny/ty + 1);
+    dim3 threads(tx, ty);
+
+    //init random state per pixel
+    curandState *d_rand_state;
+    checkCudaErrors(cudaMalloc((void **)&d_rand_state, nx * ny * sizeof(curandState)));
+    random_init<<<blocks, threads>>>(nx, ny, d_rand_state);
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
 
     std::cerr << "Rendering a " << nx << "x" << ny << " image ";
     std::cerr << "in " << tx << "x" << ty << " blocks.\n";
@@ -87,8 +61,6 @@ void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
     start = clock();
 
     //call kernel function
-    dim3 blocks(nx/tx + 1, ny/ty + 1);
-    dim3 threads(tx, ty);
     renderKernel<<<blocks, threads>>>(fb, nx, ny);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
