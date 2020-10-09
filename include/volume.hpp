@@ -114,7 +114,7 @@ __gpu__ nanovdb::Vec3f SunLightNEE(const nanovdb::Vec3f& shadowRayorigin,
     // check intersect bbox and ray
     shadowRay.clip(wBbox); 
 
-    //Ratio Tracing
+    //Ratio Tracking
     nanovdb::Vec3f throughput{1.0, 1.0, 1.0};
     float t = shadowRay.t0();
     float t_far = shadowRay.t1();
@@ -139,7 +139,7 @@ __gpu__ nanovdb::Vec3f SunLightNEE(const nanovdb::Vec3f& shadowRayorigin,
         //sample event
         int e = sampleEvent(events, rnd(rand_state));
 
-        if(e == 1 || e == 2)
+        if(e == 0 || e == 1)
         {
             break;
         }
