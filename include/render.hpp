@@ -4,12 +4,37 @@
 #include <string>
 #include "api.hpp"
 
+#define checkCudaErrors(val) check_cuda( (val), #val, __FILE__, __LINE__)
+
+
+void check_cuda(cudaError_t result, char const *const func, const char *const file, int const line)
+{
+    if(result)
+    {
+        std::cerr << "CUDA error = " << static_cast<unsigned int>(result) << "at" << 
+            file << ":" << line << " '" << func << "' \n";
+        // Make sure we call CUDA Device Reset before exiting
+        cudaDeviceReset();
+        exit(99);
+    }
+}
+
+
 
 class RenderSetting
 {
 public:
+    RenderSetting(){}
     int width;
     int height;
+    nanovdb::Vec3f lightdir = {1,0,0};
+    float l_intensity;
+    float max_density;
+    int max_depth;
+    float sigma_s;
+    float sigma_a;
+    float g;
+    int samples;
 };
 
 void SavePPM(float* fb, int nx, int ny)
@@ -61,36 +86,37 @@ __gpu__ nanovdb::Vec3f gamma(const nanovdb::Vec3f& color)
     return result;
 }
 
-__kernel__ void renderKernel(const nanovdb::FloatGrid* grid, const nanovdb::Vec3f lightdir,
-                            const float l_intensity, const float max_density,
-                            int max_depth, const float sigma_s, const float sigma_a,
-                            const float g, int samples,
-                            float *fb, int max_x, int max_y, curandState* rand_state)
+__kernel__ void renderKernel(const nanovdb::FloatGrid* grid, 
+                            const RenderSetting& setting,
+                            float *fb, curandState* rand_state)
 {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
-    if((i >= max_x) || (j >= max_y)) return;
+    if((i >= setting.width) || (j >= setting.height)) return;
 
     auto wbbox = grid->worldBBox();
     auto dim = wbbox.dim();
     nanovdb::Vec3f center = nanovdb::Vec3f(wbbox.max() + wbbox.min()) * 0.5f;
 
 
-    int pixel_index = j*max_x*3 + i*3;
+    int pixel_index = j*setting.width*3 + i*3;
+
+    // local randomstate
+    curandState local_rand_state = rand_state[j * setting.width + i];
 
     //make first ray
     nanovdb::Vec3f cameraorigin, cameradir;
-    genFirstRay(j * max_x + i, max_x, max_y, cameraorigin, cameradir, 2.0 * dim[2], center);
+    genFirstRay(j * setting.width + i, setting.width, setting.height, cameraorigin, cameradir, 2.0 * dim[2], center);
     nanovdb::Ray<float> firstRay{cameraorigin, cameradir};
 
     // Let's Montecarlo
     nanovdb::Vec3f Color{};
-    for(int i = 0; i < samples; i++)
+    for(int i = 0; i < setting.samples; i++)
     {
-        Color += RayTrace(grid, lightdir, l_intensity, rand_state, 
-                          max_density, max_depth, sigma_s, sigma_a, g, firstRay);
+        Color += RayTrace(grid, setting.lightdir, setting.l_intensity, &local_rand_state, 
+                          setting.max_density, setting.max_depth, setting.sigma_s, setting.sigma_a, setting.g, firstRay);
     }
-    Color /= float(samples);
+    Color /= float(setting.samples);
 
     // Gamma Process
     Color = gamma(Color);
