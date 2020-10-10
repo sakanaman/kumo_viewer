@@ -23,7 +23,8 @@ __gpu__ nanovdb::Vec3f local2world(const nanovdb::Vec3f& local, const nanovdb::V
 __gpu__ nanovdb::Vec3f skycolor(const nanovdb::Ray<float>& r) {
     nanovdb::Vec3f unit_direction = r.dir();
     float t = 0.5f*(unit_direction[1] + 1.0f);
-    return (1.0f-t)*nanovdb::Vec3f(1.0, 1.0, 1.0) + t*nanovdb::Vec3f(0.5, 0.7, 1.0);
+    // return (1.0f-t)*nanovdb::Vec3f(1.0, 1.0, 1.0) + t*nanovdb::Vec3f(0.5, 0.7, 1.0);
+    return {};
 }
 
 // We don`t use this function when we render "wdas_cloud.nvdb" because it's so heavy.

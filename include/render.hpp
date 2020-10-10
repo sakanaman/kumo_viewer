@@ -24,7 +24,7 @@ void check_cuda(cudaError_t result, char const *const func, const char *const fi
 class RenderSetting
 {
 public:
-    RenderSetting(){}
+    __twin__ RenderSetting(){}
     int width;
     int height;
     nanovdb::Vec3f lightdir = {1,0,0};
@@ -86,45 +86,16 @@ __gpu__ nanovdb::Vec3f gamma(const nanovdb::Vec3f& color)
     return result;
 }
 
+template<class Func>
 __kernel__ void renderKernel(const nanovdb::FloatGrid* grid, 
-                            const RenderSetting& setting,
-                            float *fb, curandState* rand_state)
+                            float *fb, curandState* rand_state, Func f)
 {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
-    if((i >= setting.width) || (j >= setting.height)) return;
 
-    auto wbbox = grid->worldBBox();
-    auto dim = wbbox.dim();
-    nanovdb::Vec3f center = nanovdb::Vec3f(wbbox.max() + wbbox.min()) * 0.5f;
+    f(i, j, fb, grid, rand_state);
 
-
-    int pixel_index = j*setting.width*3 + i*3;
-
-    // local randomstate
-    curandState local_rand_state = rand_state[j * setting.width + i];
-
-    //make first ray
-    nanovdb::Vec3f cameraorigin, cameradir;
-    genFirstRay(j * setting.width + i, setting.width, setting.height, cameraorigin, cameradir, 2.0 * dim[2], center);
-    nanovdb::Ray<float> firstRay{cameraorigin, cameradir};
-
-    // Let's Montecarlo
-    nanovdb::Vec3f Color{};
-    for(int i = 0; i < setting.samples; i++)
-    {
-        Color += RayTrace(grid, setting.lightdir, setting.l_intensity, &local_rand_state, 
-                          setting.max_density, setting.max_depth, setting.sigma_s, setting.sigma_a, setting.g, firstRay);
-    }
-    Color /= float(setting.samples);
-
-    // Gamma Process
-    Color = gamma(Color);
-
-    // write color buffer
-    fb[pixel_index + 0] = Color[0];
-    fb[pixel_index + 1] = Color[1];
-    fb[pixel_index + 2] = Color[2];
+    return;
 }
 
 void render(nanovdb::GridHandle<nanovdb::CudaDeviceBuffer>& handle,
