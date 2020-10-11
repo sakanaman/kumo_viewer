@@ -72,7 +72,7 @@ __gpu__ void genFirstRay(int i, int w, int h, nanovdb::Vec3f& origin, nanovdb::V
     const float px = (2.f * u - 1.f) * tanf(fov / 2 * 3.14159265358979323846f / 180.f) * aspect;
     const float py = (2.f * v - 1.f) * tanf(fov / 2 * 3.14159265358979323846f / 180.f);
 
-    origin = wBBoxCenter + nanovdb::Vec3f(0, 0, wBBoxDimZ);
+    origin = wBBoxCenter + nanovdb::Vec3f(0, 0, wBBoxDimZ*0.6);
     dir = nanovdb::Vec3f(px, py, -1.f).normalize();
 }
 

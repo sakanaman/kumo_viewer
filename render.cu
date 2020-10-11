@@ -109,7 +109,7 @@ int main()
     {
         //Load grid data from ~.nvdb
         auto handle 
-        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../nvdbs/bunny_cloud.nvdb");
+        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../nvdbs/high-altitude_big_cloud_flat.14.nvdb");
 
         // Load Grid to GPU
         handle.deviceUpload();
@@ -122,12 +122,12 @@ int main()
 
         // TODO: use setting file (eg. json, yaml...etc)
         RenderSetting setting;
-        setting.height = 800;
-        setting.width = 1500;
+        setting.height = 500;
+        setting.width = 700;
         setting.max_density = max_density;
-        setting.l_intensity = 2.f;
-        setting.sigma_a = 0.f;
-        setting.sigma_s = 3.5f;
+        setting.l_intensity = 3.f;
+        setting.sigma_a = 0.5f;
+        setting.sigma_s = 2.5f;
         setting.samples = 100;
         setting.g = -0.1;
         setting.max_depth = 100;

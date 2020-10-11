@@ -23,8 +23,8 @@ __gpu__ nanovdb::Vec3f local2world(const nanovdb::Vec3f& local, const nanovdb::V
 __gpu__ nanovdb::Vec3f skycolor(const nanovdb::Ray<float>& r) {
     nanovdb::Vec3f unit_direction = r.dir();
     float t = 0.5f*(unit_direction[1] + 1.0f);
-    // return (1.0f-t)*nanovdb::Vec3f(1.0, 1.0, 1.0) + t*nanovdb::Vec3f(0.5, 0.7, 1.0);
-    return {};
+    return (1.0f-t)*nanovdb::Vec3f(1.0, 1.0, 1.0) + t*nanovdb::Vec3f(0.5, 0.7, 1.0);
+    // return {};
 }
 
 // We don`t use this function when we render "wdas_cloud.nvdb" because it's so heavy.
@@ -64,7 +64,7 @@ __gpu__ nanovdb::Vec3f henyey_greenstein_sample(float g, float u, float v)
     float s = 2*u - 1;
     float T = (1 - g*g) / (1 + g * s);
     float cosTheta = 1.0/(2.0 * g) * (1 + g*g - powf(T, 2.0f));
-    float sinTheta = sqrtf(1 - cosTheta*cosTheta);
+    float sinTheta = sqrtf(abs(1 - cosTheta*cosTheta));
     float phi = 2 * pi * v;
 
     //Note: This renderer assumes that Y-up.
@@ -177,12 +177,12 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
     nanovdb::Vec3f L{};
 
     // start delta tracking
-    for(int depth = 0; depth < max_depth; depth++)
+    for(int depth = 0;; depth++)
     {
         //not intersect..
         if(wRay.clip(wBbox) == false)
         {
-            L = skycolor(wRay);
+            L += skycolor(wRay);
             break;
         }
 
@@ -199,8 +199,7 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
          //transmit
         if(t >= t_far)
         {
-            f = f * skycolor(wRay);
-            L += f/pdfs;
+            L += skycolor(wRay);
             break;
         }
 
@@ -228,9 +227,9 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
         else if (e == 1)//scatter
         {
             //NEE for sunlight
-            float theta = acosf(lightdir.dot(wRay.dir()));
-            float nee_phase = henyey_greenstein_phase(theta, g);
-            L += f/pdfs * nee_phase * SunLightNEE(pos, lightdir, rand_state, grid, l_intensity, max_t, sigma_s, sigma_a);  
+            // float theta = acosf(lightdir.dot(wRay.dir()));
+            // float nee_phase = henyey_greenstein_phase(theta, g);
+            // L += f/pdfs * nee_phase * SunLightNEE(pos, lightdir, rand_state, grid, l_intensity, max_t, sigma_s, sigma_a);  
 
             //make next scatter Ray
             //   localize
@@ -242,19 +241,21 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
             //   reset local ray to world ray
             nanovdb::Vec3f scatterdir = local2world(local_scatterdir, b1, b2, wRay.dir());
             //   reset ray
-            wRay = nanovdb::Ray<float>{pos, scatterdir};
-
+            wRay.reset(pos, scatterdir);
             //NOTE: you don't have to calculate throuput here!!
         }
         else // null scatter
         {
             // renew ray
-            wRay = nanovdb::Ray<float>{pos, wRay.dir()};
+            wRay.reset(pos, wRay.dir());
             continue;
         }
         
     }
-
+    if(isnan(L[0]) || isnan(L[1]) || isnan(L[2]))
+    {
+        printf("warning nan\n");
+    }
     return L;
 }
 
