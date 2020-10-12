@@ -62,7 +62,7 @@ auto f = [setting] __gpu__ (int i, int j, float* fb, const nanovdb::FloatGrid* g
 
     //make first ray
     nanovdb::Vec3f cameraorigin, cameradir;
-    genFirstRay(j * setting.width + i, setting.width, setting.height, cameraorigin, cameradir, 2.0 * dim[2], center);
+    genFirstRay(j * setting.width + i, setting.width, setting.height, cameraorigin, cameradir, 2.0 * dim[0], center);
     nanovdb::Ray<float> firstRay{cameraorigin, cameradir};
 
     // Let's Montecarlo
@@ -109,7 +109,7 @@ int main()
     {
         //Load grid data from ~.nvdb
         auto handle 
-        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../nvdbs/high-altitude_big_cloud_flat.14.nvdb");
+        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../nvdbs/wdas_cloud.nvdb");
 
         // Load Grid to GPU
         handle.deviceUpload();
@@ -118,17 +118,18 @@ int main()
         auto* h_grid = handle.grid<float>();
         auto acc = h_grid->getAccessor();
         auto ibbox = h_grid->indexBBox();
-        float max_density = searchMaxDensity(ibbox, acc);
+        // float max_density = searchMaxDensity(ibbox, acc);
+        float max_density = 1.0f;
 
         // TODO: use setting file (eg. json, yaml...etc)
         RenderSetting setting;
-        setting.height = 500;
-        setting.width = 700;
+        setting.height = 720;
+        setting.width = 1280;
         setting.max_density = max_density;
         setting.l_intensity = 3.f;
-        setting.sigma_a = 0.5f;
-        setting.sigma_s = 2.5f;
-        setting.samples = 100;
+        setting.sigma_a = 0.05f;
+        setting.sigma_s = 0.25f;
+        setting.samples = 200;
         setting.g = -0.1;
         setting.max_depth = 100;
 

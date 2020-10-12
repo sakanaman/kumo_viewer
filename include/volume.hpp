@@ -242,7 +242,6 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
             nanovdb::Vec3f scatterdir = local2world(local_scatterdir, b1, b2, wRay.dir());
             //   reset ray
             wRay.reset(pos, scatterdir);
-            //NOTE: you don't have to calculate throuput here!!
         }
         else // null scatter
         {
@@ -252,10 +251,7 @@ __gpu__ nanovdb::Vec3f RayTrace(const nanovdb::FloatGrid* grid,
         }
         
     }
-    if(isnan(L[0]) || isnan(L[1]) || isnan(L[2]))
-    {
-        printf("warning nan\n");
-    }
+
     return L;
 }
 
