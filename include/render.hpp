@@ -58,7 +58,7 @@ void SavePPM(float* fb, int nx, int ny)
 }
 
 
-__gpu__ void genFirstRay(int i, int w, int h, nanovdb::Vec3f& origin, nanovdb::Vec3f& dir,
+__twin__ void genFirstRay(int i, int w, int h, nanovdb::Vec3f& origin, nanovdb::Vec3f& dir,
                          float wBBoxDimZ, const nanovdb::Vec3f& wBBoxCenter)
 {
     int x = i % w;

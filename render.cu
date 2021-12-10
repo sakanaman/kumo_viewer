@@ -69,8 +69,10 @@ auto f = [setting] __gpu__ (int i, int j, float* fb, const nanovdb::FloatGrid* g
     nanovdb::Vec3f Color{};
     for(int i = 0; i < setting.samples; i++)
     {
-        Color += RayTrace(grid, setting.lightdir, setting.l_intensity, &local_rand_state, 
+        Color += RayTraceNEE(grid, setting.lightdir, setting.l_intensity, &local_rand_state, 
                           setting.max_density, setting.max_depth, setting.sigma_s, setting.sigma_a, setting.g, firstRay);
+        // Color += RayTrace(grid, setting.lightdir, setting.l_intensity, &local_rand_state, 
+        //                   setting.max_density, setting.max_depth, setting.sigma_s, setting.sigma_a, setting.g, firstRay);
     }
     Color /= float(setting.samples);
 
@@ -98,6 +100,7 @@ std::cerr << "took " << timer_seconds << " seconds.\n";
 SavePPM(fb, nx, ny);
 
 //free several data
+checkCudaErrors(cudaFree(d_rand_state));
 checkCudaErrors(cudaFree(fb));
 }
 
@@ -109,7 +112,7 @@ int main()
     {
         //Load grid data from ~.nvdb
         auto handle 
-        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../nvdbs/wdas_cloud.nvdb");
+        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../../nvdbs/wdas_cloud.nvdb");
 
         // Load Grid to GPU
         handle.deviceUpload();
@@ -123,13 +126,14 @@ int main()
 
         // TODO: use setting file (eg. json, yaml...etc)
         RenderSetting setting;
-        setting.height = 720;
-        setting.width = 1280;
+        setting.height = 512;
+        setting.width = 700;
         setting.max_density = max_density;
-        setting.l_intensity = 3.f;
-        setting.sigma_a = 0.05f;
-        setting.sigma_s = 0.25f;
-        setting.samples = 200;
+        setting.l_intensity = 5.0f;
+        setting.lightdir = {0.0, 0.0, 1.0};
+        setting.sigma_a = 0.0f;
+        setting.sigma_s = 0.09f;
+        setting.samples = 1000;
         setting.g = -0.1;
         setting.max_depth = 100;
 

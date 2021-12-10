@@ -51,10 +51,10 @@ __cpu__ float searchMaxDensity(const nanovdb::CoordBBox& bbox,
 //////////////////////////////////////////////////
 //            CORE LOGIC FUNCTIONS              //
 //////////////////////////////////////////////////
-__gpu__ float henyey_greenstein_phase(float theta, float g)
+__gpu__ float henyey_greenstein_phase(float costheta, float g)
 {
     const float pi = 3.14159265358979323846f;
-    float denomi = 1 + g*g - 2*g*cosf(theta);
+    float denomi = 1 + g*g - 2*g*costheta;
     return 1/(4 * pi) * (1 - g*g) / powf(denomi, 3.0f/2.0f);
 }
 
@@ -119,6 +119,7 @@ __gpu__ nanovdb::Vec3f SunLightNEE(const nanovdb::Vec3f& shadowRayorigin,
     nanovdb::Vec3f throughput{1.0, 1.0, 1.0};
     float t = shadowRay.t0();
     float t_far = shadowRay.t1();
+
     while(true)
     {
         //distance sampling
@@ -137,19 +138,111 @@ __gpu__ nanovdb::Vec3f SunLightNEE(const nanovdb::Vec3f& shadowRayorigin,
         float null_weight = max_t - absorp_weight - scatter_weight;
         nanovdb::Vec3f events{absorp_weight, scatter_weight, null_weight};
 
-        //sample event
-        int e = sampleEvent(events, rnd(rand_state));
+        //estimate transmittance
+        throughput *= null_weight/max_t;
+    }
+    return throughput * l_intensity;
+}
 
-        if(e == 0 || e == 1)
+__gpu__ nanovdb::Vec3f RayTraceNEE(const nanovdb::FloatGrid* grid,
+                                const nanovdb::Vec3f& lightdir,
+                                const float l_intensity,
+                                curandState* rand_state,
+                                const float max_density,
+                                const int max_depth,
+                                float sigma_s,
+                                float sigma_a,
+                                float g,
+                                const nanovdb::Ray<float>& firstray)
+{
+    
+    float max_t = (sigma_s + sigma_a) * max_density;
+
+    auto acc = grid->getAccessor();
+    nanovdb::TrilinearSampler<decltype(acc)> sampler(acc);
+    nanovdb::Ray<float> wRay = firstray;
+    auto wBbox = grid->worldBBox();
+
+    nanovdb::Vec3f f{1,1,1};
+    nanovdb::Vec3f pdfs{1,1,1};
+    nanovdb::Vec3f throughput{1.0, 1.0, 1.0};
+    nanovdb::Vec3f L{0, 0, 0};
+
+    // start delta tracking
+    for(int depth = 0;; depth++)
+    {
+        //not intersect..
+        if(wRay.clip(wBbox) == false)
         {
             break;
         }
-        else
+
+
+        //intersect!!
+        float t_near = wRay.t0();
+        float t_far = wRay.t1();
+
+        //distant sampling
+        float t = t_near;
+        float d_sampled = distant_sample(max_t, rnd(rand_state));
+        t += d_sampled;
+
+         //transmit
+        if(t >= t_far)
         {
-            throughput *= null_weight/max_t;
+            break;
         }
+
+        //sample density
+        auto pos = wRay(t);
+        auto ipos = grid->worldToIndexF(pos);
+        float density = sampler(ipos);
+
+        //calculate several parametor
+        float absorp_weight = sigma_a * density;
+        float scatter_weight = sigma_s * density;
+        float null_weight = max_t - absorp_weight - scatter_weight;
+        nanovdb::Vec3f events{absorp_weight, scatter_weight, null_weight};
+
+        //Sample Event
+        // 0-->absorp, 1-->scatter, 2-->null scatter
+        int e = sampleEvent(events, rnd(rand_state));
+
+
+        if(e == 0)//absorp
+        {
+            //Todo: correspond to emission
+            break;
+        }
+        else if (e == 1)//scatter
+        {
+            //NEE for sunlight
+            float costheta = lightdir.dot(wRay.dir());
+            float nee_phase = henyey_greenstein_phase(costheta, g);
+            L += throughput * nee_phase * SunLightNEE(pos, lightdir, rand_state, grid, l_intensity, max_t, sigma_s, sigma_a);  
+
+            //make next scatter Ray
+            //   localize
+            nanovdb::Vec3f b1;
+            nanovdb::Vec3f b2;
+            branchlessONB(wRay.dir(), b1, b2);
+            //   sample scatter dir
+            nanovdb::Vec3f local_scatterdir =  henyey_greenstein_sample(g, rnd(rand_state), rnd(rand_state));
+            //   reset local ray to world ray
+            nanovdb::Vec3f scatterdir = local2world(local_scatterdir, b1, b2, wRay.dir());
+            //   reset ray
+            wRay.reset(pos, scatterdir);
+        }
+        else // null scatter
+        {
+            // renew ray
+            wRay.reset(pos, wRay.dir());
+            continue;
+        }
+        
     }
-    return throughput * l_intensity;
+
+    return L;
 }
 
 

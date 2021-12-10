@@ -16,7 +16,6 @@ if(CUDA_FOUND)
 	set ( CMAKE_CUDA_STANDARD_REQUIRED ON )
     set ( CMAKE_CUDA_FLAGS "--extended-lambda")
     enable_language(CUDA)
-    enable_language(CUDA)
 endif()
 
 #extern

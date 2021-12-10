@@ -7,5 +7,6 @@ Renderer for foggy object like smoke, cloud
 ## Feature
 - Volumetric Path Tracing
 - Delta Tracking
+- Distant Light with Ratio Tracking
 - GPU Programming with CUDA
 - using NanoVDB
