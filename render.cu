@@ -2,6 +2,8 @@
 #include <iostream>
 #include <fstream>
 #include <time.h>
+#include <string>
+#include "path.hpp"
 
 
 
@@ -108,11 +110,12 @@ checkCudaErrors(cudaFree(fb));
 
 int main()
 {
+    std::string proj_dir = PROJECT_DIR;
     try
     {
         //Load grid data from ~.nvdb
         auto handle 
-        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>("../../nvdbs/wdas_cloud.nvdb");
+        = nanovdb::io::readGrid<nanovdb::CudaDeviceBuffer>(proj_dir + "/nvdbs/wdas_cloud.nvdb");
 
         // Load Grid to GPU
         handle.deviceUpload();
@@ -133,7 +136,7 @@ int main()
         setting.lightdir = {0.0, 0.0, 1.0};
         setting.sigma_a = 0.0f;
         setting.sigma_s = 0.09f;
-        setting.samples = 1000;
+        setting.samples = 100;
         setting.g = -0.1;
         setting.max_depth = 100;
 

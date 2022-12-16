@@ -27,6 +27,10 @@ include_directories(include)
 #zlib include
 include_directories(${ZLIB_INCLUDE_DIR})
 
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/path.h.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/path.hpp"
+)
 
 #Our Sources and Headers
 # file(GLOB CPP_SOURCES LIST_DIRECTORIES false 
