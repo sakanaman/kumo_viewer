@@ -5,7 +5,8 @@ cmake_minimum_required(VERSION 3.16)
 set (CMAKE_CXX_STANDARD 11)
 
 #ZLIB
-find_package(ZLIB REQUIRED)
+# find_package(ZLIB REQUIRED)
+add_subdirectory(ext/zlib-1.3.1)
 add_definitions(-DNANOVDB_USE_ZIP)
 
 #CUDA
@@ -18,30 +19,19 @@ if(CUDA_FOUND)
     enable_language(CUDA)
 endif()
 
+add_executable(kumo render.cu)
+
 #extern
-include_directories(ext)
+target_include_directories(kumo PUBLIC ext)
+target_include_directories(kumo PUBLIC ext/zlib-1.3.1)
 
 #include
-include_directories(include)
-
-#zlib include
-include_directories(${ZLIB_INCLUDE_DIR})
+target_include_directories(kumo PUBLIC include)
 
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/path.h.in"
     "${CMAKE_CURRENT_SOURCE_DIR}/path.hpp"
 )
 
-#Our Sources and Headers
-# file(GLOB CPP_SOURCES LIST_DIRECTORIES false 
-#     ${CMAKE_SOURCE_DIR}/src/*.cpp)
-# message(STATUS ${CPP_SOURCES})
-# file(GLOB CU_SOURCES LIST_DIRECTORIES false
-#     ${CMAKE_SOURCE_DIR}/src/*.cu)
-# message(STATUS ${CU_SOURCES})
-
-# add_library(core STATIC ${CPP_SOURCES} ${CU_SOURCES})
-
 #Main
-add_executable(kumo render.cu)
-target_link_libraries(kumo PRIVATE ZLIB::ZLIB)
+target_link_libraries(kumo PUBLIC zlibstatic)

@@ -32,7 +32,10 @@ mv wdas_cloud.nvdb kumo_viewer/nvdbs
 # example for windows
 mkdir build
 cd build
-cmake .. -DCMAKE_TOOLCHAIN_FILE="path to vcpkg.cmake"
+cmake .. -DCMAKE_CUDA_ARCHITECTURES=75
 cmake --build .
 ```
+> I set CMAKE_CUDA_ARCHITECTURES=75 to tell cmake which CUDA architecture I use.
+> Please refer [this page](https://cmake.org/cmake/help/latest/prop_tgt/CUDA_ARCHITECTURES.html).
+
 6. Run!
